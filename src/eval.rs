@@ -14,55 +14,62 @@ pub(crate) fn evaluate(exprs: &[Expression]) -> AtomValue {
 }
 
 fn evaluate_fn(id: &str, exprs: &[Expression]) -> AtomValue {
+    let atoms: Vec<AtomValue> = exprs
+        .iter()
+        .map(|expr| match expr {
+            Expression::List(list_exprs) => evaluate(list_exprs),
+            Expression::Atom(atom_val) => atom_val.to_owned(),
+        })
+        .collect();
+
     match id {
-        "+" => return add(exprs),
-        "*" => return multiply(exprs),
+        "+" => return add(&atoms),
+        "*" => return multiply(&atoms),
+        "-" => return subtract(&atoms),
+        "/" => return divide(&atoms),
         &_ => panic!(),
     }
 }
-
-fn add(exprs: &[Expression]) -> AtomValue {
-    let mut value: f64 = 0.;
-    let mut is_int: bool = true;
-    for expr in exprs {
-        let rhs = match expr {
-            Expression::Atom(av) => av.to_owned(),
-            Expression::List(list_exprs) => evaluate(list_exprs),
-        };
-        match rhs {
-            AtomValue::Int(int) => value += int as f64,
-            AtomValue::Float(float) => {
-                is_int = false;
-                value += float
-            }
-            _ => panic!(),
+fn numeric_binop(
+    lhs: &AtomValue,
+    rhs: &AtomValue,
+    int_op: impl Fn(i64, i64) -> i64,
+    float_op: impl Fn(f64, f64) -> f64,
+) -> AtomValue {
+    match (lhs, rhs) {
+        (AtomValue::Int(acc_int), &AtomValue::Int(val_int)) => {
+            AtomValue::Int(int_op(*acc_int, val_int))
         }
+        (AtomValue::Int(acc_int), &AtomValue::Float(val_float)) => {
+            AtomValue::Float(float_op(*acc_int as f64, val_float))
+        }
+        (AtomValue::Float(acc_float), &AtomValue::Int(val_float)) => {
+            AtomValue::Float(float_op(*acc_float, val_float as f64))
+        }
+        (AtomValue::Float(acc_float), &AtomValue::Float(val_float)) => {
+            AtomValue::Float(float_op(*acc_float, val_float))
+        }
+        _ => panic!(),
     }
-    if is_int {
-        return AtomValue::Int(value as i64);
-    }
-    return AtomValue::Float(value);
 }
 
-fn multiply(exprs: &[Expression]) -> AtomValue {
-    let mut value: f64 = 1.;
-    let mut is_int: bool = true;
-    for expr in exprs {
-        let rhs = match expr {
-            Expression::Atom(av) => av.to_owned(),
-            Expression::List(list_exprs) => evaluate(list_exprs),
-        };
-        match rhs {
-            AtomValue::Int(int) => value *= int as f64,
-            AtomValue::Float(float) => {
-                is_int = false;
-                value *= float
-            }
-            _ => panic!(),
-        }
-    }
-    if is_int {
-        return AtomValue::Int(value as i64);
-    }
-    return AtomValue::Float(value);
+fn add(vals: &[AtomValue]) -> AtomValue {
+    vals.iter().fold(AtomValue::Int(0), |acc, val| {
+        numeric_binop(&acc, val, |a, b| a + b, |a, b| a + b)
+    })
+}
+fn multiply(vals: &[AtomValue]) -> AtomValue {
+    vals.iter().fold(AtomValue::Int(1), |acc, val| {
+        numeric_binop(&acc, val, |a, b| a * b, |a, b| a * b)
+    })
+}
+fn divide(vals: &[AtomValue]) -> AtomValue {
+    vals[1..].iter().fold(vals[0].clone(), |acc, val| {
+        numeric_binop(&acc, val, |a, b| a + b, |a, b| a + b)
+    })
+}
+fn subtract(vals: &[AtomValue]) -> AtomValue {
+    vals[1..].iter().fold(vals[0].clone(), |acc, val| {
+        numeric_binop(&acc, val, |a, b| a + b, |a, b| a + b)
+    })
 }
