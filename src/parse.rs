@@ -21,32 +21,40 @@ impl fmt::Display for ParseError {
 // 3. Implement the Error trait
 impl Error for ParseError {}
 
-pub(crate) fn parse_list(input: &str) -> Result<(Value, usize), ParseError> {
-    let (first_value, first_size) = parse_one(&input)?;
-    match first_value {
-        Value::Nil => return Ok((first_value, first_size)),
-        _ => {
-            let (next_value, next_size) = parse_list(&input[first_size..])?;
-            return Ok((
-                Value::List((Rc::new(first_value), Rc::new(next_value))),
-                first_size + next_size,
-            ));
-        }
+pub fn parse(input: &str) -> Result<Value, ParseError> {
+    let trimmed = input.trim_start();
+    if !trimmed.starts_with('(') {
+        // handle bare atom / error, as appropriate
+        return Err(ParseError::UnclosedParen);
     }
+    let (value, _) = parse_list(&trimmed[1..])?;
+    Ok(value)
 }
 
-fn parse_one(input: &str) -> Result<(Value, usize), ParseError> {
+pub(crate) fn parse_list(input: &str) -> Result<(Value, usize), ParseError> {
+    let (first_value, first_size) = parse_one(&input)?;
+    if let Some(fv) = first_value {
+        let (next_value, next_size) = parse_list(&input[first_size..])?;
+        return Ok((
+            Value::List((Rc::new(fv), Rc::new(next_value))),
+            first_size + next_size,
+        ));
+    }
+    Ok((Value::Nil, first_size))
+}
+
+fn parse_one(input: &str) -> Result<(Option<Value>, usize), ParseError> {
     let n_blank = input
         .find(|c: char| !c.is_whitespace())
         .ok_or(ParseError::UnclosedParen)?;
     let first = input.chars().nth(n_blank).unwrap();
     if first == ')' {
-        return Ok((Value::Nil, n_blank + 1));
+        return Ok((None, n_blank + 1));
     } else if first == '(' {
         let (val, size) = parse_list(&input[n_blank + 1..])?;
-        return Ok((val, size + n_blank));
+        return Ok((Some(val), size + n_blank + 1));
     }
 
     let (val, n_consumed) = parse_atom(&input[n_blank..])?;
-    return Ok((val, n_consumed + n_blank));
+    return Ok((Some(val), n_consumed + n_blank));
 }
