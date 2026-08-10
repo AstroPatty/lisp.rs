@@ -1,37 +1,52 @@
-use crate::atom::{AtomValue, parse_atom};
+use crate::atom::{Value, parse_atom};
+use std::error::Error;
+use std::fmt;
+use std::rc::Rc;
 
 #[derive(Debug)]
-pub(crate) enum Expression {
-    Atom(AtomValue),
-    List(Vec<Expression>),
+pub enum ParseError {
+    UnclosedParen,
+    UnexpectedEOF,
 }
 
-pub(crate) fn parse_list(input: &str) -> (Vec<Expression>, usize) {
-    let mut slice = input;
-    if slice.chars().next() != Some('(') {
-        panic!()
-    }
-    slice = &slice[1..];
-    let n_empty = slice.find(|c: char| !c.is_whitespace()).unwrap();
-    let mut counter = 1 + n_empty;
-    slice = &slice[n_empty..];
-
-    let mut exps = Vec::new();
-    loop {
-        let mut expr_size = slice.find(|c: char| !c.is_whitespace()).unwrap();
-        slice = &slice[expr_size..];
-        if slice.chars().next() == Some(')') {
-            return (exps, counter + 1);
-        } else if slice.chars().next() == Some('(') {
-            let (list, list_size) = parse_list(slice);
-            exps.push(Expression::List(list));
-            expr_size += list_size;
-        } else {
-            let (atom, atom_size) = parse_atom(slice);
-            exps.push(Expression::Atom(atom));
-            expr_size += atom_size;
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseError::UnclosedParen => write!(f, "Item was not found."),
+            ParseError::UnexpectedEOF => write!(f, "Item was not found."),
         }
-        counter += expr_size;
-        slice = &slice[expr_size..];
     }
+}
+
+// 3. Implement the Error trait
+impl Error for ParseError {}
+
+pub(crate) fn parse_list(input: &str) -> Result<(Value, usize), ParseError> {
+    let (first_value, first_size) = parse_one(&input)?;
+    match first_value {
+        Value::Nil => return Ok((first_value, first_size)),
+        _ => {
+            let (next_value, next_size) = parse_list(&input[first_size..])?;
+            return Ok((
+                Value::List((Rc::new(first_value), Rc::new(next_value))),
+                first_size + next_size,
+            ));
+        }
+    }
+}
+
+fn parse_one(input: &str) -> Result<(Value, usize), ParseError> {
+    let n_blank = input
+        .find(|c: char| !c.is_whitespace())
+        .ok_or(ParseError::UnclosedParen)?;
+    let first = input.chars().nth(n_blank).unwrap();
+    if first == ')' {
+        return Ok((Value::Nil, n_blank + 1));
+    } else if first == '(' {
+        let (val, size) = parse_list(&input[n_blank + 1..])?;
+        return Ok((val, size + n_blank));
+    }
+
+    let (val, n_consumed) = parse_atom(&input[n_blank..])?;
+    return Ok((val, n_consumed + n_blank));
 }

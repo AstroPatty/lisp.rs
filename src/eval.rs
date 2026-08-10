@@ -1,75 +1,80 @@
-use crate::atom::AtomValue;
-use crate::parse::Expression;
+use crate::atom::Value;
+use std::error::Error;
+use std::fmt;
+use std::rc::Rc;
 
-pub(crate) fn evaluate(exprs: &[Expression]) -> AtomValue {
-    let first = exprs.iter().next().unwrap();
-    if let Expression::Atom(av) = first {
-        if let AtomValue::Id(id) = av {
-            return evaluate_fn(id, &exprs[1..]);
+#[derive(Debug)]
+pub enum EvalError {
+    Unknown,
+}
+
+impl fmt::Display for EvalError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EvalError::Unknown => write!(f, "Unknown error"),
         }
-        panic!();
-    } else {
-        panic!();
     }
 }
 
-fn evaluate_fn(id: &str, exprs: &[Expression]) -> AtomValue {
-    let atoms: Vec<AtomValue> = exprs
-        .iter()
-        .map(|expr| match expr {
-            Expression::List(list_exprs) => evaluate(list_exprs),
-            Expression::Atom(atom_val) => atom_val.to_owned(),
-        })
-        .collect();
+// 3. Implement the Error trait
+impl Error for EvalError {}
 
+pub(crate) fn evaluate(value: Rc<Value>) -> Result<Rc<Value>, EvalError> {
+    match value.as_ref() {
+        Value::List((head, rest)) => {
+            let op = match head.as_ref() {
+                Value::Id(name) => name.clone(),
+                _ => return Err(EvalError::Unknown),
+            };
+            let args = eval_args(rest.clone())?;
+            evaluate_fn(&op, args)
+        }
+        _ => Ok(value),
+    }
+}
+
+fn eval_args(mut list: Rc<Value>) -> Result<Vec<Rc<Value>>, EvalError> {
+    let mut out = Vec::new();
+    while let Value::List((car, cdr)) = list.as_ref() {
+        out.push(evaluate(car.clone())?);
+        list = cdr.clone()
+    }
+    Ok(out)
+}
+
+fn evaluate_fn(id: &str, args: Vec<Rc<Value>>) -> Result<Rc<Value>, EvalError> {
     match id {
-        "+" => return add(&atoms),
-        "*" => return multiply(&atoms),
-        "-" => return subtract(&atoms),
-        "/" => return divide(&atoms),
+        "+" => {
+            return Ok(Rc::new(numeric_binop(&args, &|a, b| a + b, &|a, b| a + b)));
+        }
+        "*" => {
+            return Ok(Rc::new(numeric_binop(&args, &|a, b| a * b, &|a, b| a * b)));
+        }
         &_ => panic!(),
     }
 }
 fn numeric_binop(
-    lhs: &AtomValue,
-    rhs: &AtomValue,
-    int_op: impl Fn(i64, i64) -> i64,
-    float_op: impl Fn(f64, f64) -> f64,
-) -> AtomValue {
-    match (lhs, rhs) {
-        (AtomValue::Int(acc_int), &AtomValue::Int(val_int)) => {
-            AtomValue::Int(int_op(*acc_int, val_int))
-        }
-        (AtomValue::Int(acc_int), &AtomValue::Float(val_float)) => {
-            AtomValue::Float(float_op(*acc_int as f64, val_float))
-        }
-        (AtomValue::Float(acc_float), &AtomValue::Int(val_float)) => {
-            AtomValue::Float(float_op(*acc_float, val_float as f64))
-        }
-        (AtomValue::Float(acc_float), &AtomValue::Float(val_float)) => {
-            AtomValue::Float(float_op(*acc_float, val_float))
-        }
-        _ => panic!(),
-    }
-}
+    args: &[Rc<Value>],
+    int_op: &impl Fn(i64, i64) -> i64,
+    float_op: &impl Fn(f64, f64) -> f64,
+) -> Value {
+    if let Some(next_item) = args.iter().next() {
+        let rhs = numeric_binop(&args[1..], int_op, float_op);
+        return match (next_item.as_ref(), rhs) {
+            (lhs, Value::Nil) => lhs.clone(),
+            (Value::Int(lhs_val), Value::Int(rhs_val)) => Value::Int(int_op(*lhs_val, rhs_val)),
+            (Value::Float(lhs_val), Value::Int(rhs_val)) => {
+                Value::Float(float_op(*lhs_val, rhs_val as f64))
+            }
+            (Value::Int(lhs_val), Value::Float(rhs_val)) => {
+                Value::Float(float_op(*lhs_val as f64, rhs_val))
+            }
 
-fn add(vals: &[AtomValue]) -> AtomValue {
-    vals.iter().fold(AtomValue::Int(0), |acc, val| {
-        numeric_binop(&acc, val, |a, b| a + b, |a, b| a + b)
-    })
-}
-fn multiply(vals: &[AtomValue]) -> AtomValue {
-    vals.iter().fold(AtomValue::Int(1), |acc, val| {
-        numeric_binop(&acc, val, |a, b| a * b, |a, b| a * b)
-    })
-}
-fn divide(vals: &[AtomValue]) -> AtomValue {
-    vals[1..].iter().fold(vals[0].clone(), |acc, val| {
-        numeric_binop(&acc, val, |a, b| a + b, |a, b| a + b)
-    })
-}
-fn subtract(vals: &[AtomValue]) -> AtomValue {
-    vals[1..].iter().fold(vals[0].clone(), |acc, val| {
-        numeric_binop(&acc, val, |a, b| a + b, |a, b| a + b)
-    })
+            (Value::Float(lhs_val), Value::Float(rhs_val)) => {
+                Value::Float(float_op(*lhs_val, rhs_val))
+            }
+            _ => panic!(),
+        };
+    }
+    Value::Nil
 }
