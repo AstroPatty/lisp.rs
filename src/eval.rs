@@ -32,8 +32,7 @@ pub(crate) fn evaluate(value: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Val
                     }
                     env.borrow().lookup(name).ok_or(EvalError::Unknown)?
                 }
-
-                _ => return Err(EvalError::Unknown),
+                _ => evaluate(head.clone(), env.clone())?,
             };
             let args = eval_args(rest.clone(), env.clone())?;
             evaluate_fn(&op, args)
@@ -54,8 +53,9 @@ fn eval_args(mut list: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Vec<Rc<Value>
 }
 
 fn evaluate_fn(callable: &Value, args: Vec<Rc<Value>>) -> Result<Rc<Value>, EvalError> {
-    if let Value::Function(func) = callable {
-        return Ok(Rc::new(func(&args)?));
+    match callable {
+        Value::Function(func) => Ok(Rc::new(func(&args)?)),
+        Value::Lambda(func) => Ok(func.apply(args)?),
+        _ => Err(EvalError::Unknown),
     }
-    Err(EvalError::Unknown)
 }

@@ -1,6 +1,7 @@
 mod atom;
 mod env;
 mod eval;
+mod lambda;
 mod numeric;
 mod parse;
 mod special;

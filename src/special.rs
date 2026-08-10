@@ -1,6 +1,7 @@
 use crate::atom::Value;
 use crate::env::Env;
 use crate::eval::{EvalError, evaluate};
+use crate::lambda::lambda;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -13,6 +14,7 @@ pub(crate) fn get_special_forms()
     output.insert(String::from("setq"), setq);
     output.insert(String::from("progn"), progn);
     output.insert(String::from("if"), conditional);
+    output.insert(String::from("lambda"), lambda);
     output
 }
 
@@ -60,7 +62,7 @@ fn setq(val: &Value, env: Rc<RefCell<Env>>) -> Result<Value, EvalError> {
     return Err(EvalError::Unknown);
 }
 
-fn progn(val: &Value, env: Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+pub(crate) fn progn(val: &Value, env: Rc<RefCell<Env>>) -> Result<Value, EvalError> {
     let mut current_list = val;
     while let Value::List((car, cdr)) = current_list {
         let car_value = evaluate(car.clone(), env.clone());

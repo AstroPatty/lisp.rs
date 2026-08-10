@@ -1,4 +1,5 @@
 use crate::eval::EvalError;
+use crate::lambda::Lambda;
 use crate::parse::ParseError;
 use std::rc::Rc;
 
@@ -12,6 +13,7 @@ pub(crate) enum Value {
     Id(String),
     List((Rc<Value>, Rc<Value>)),
     Function(fn(&[Rc<Value>]) -> Result<Value, EvalError>),
+    Lambda(Lambda),
     Nil,
 }
 

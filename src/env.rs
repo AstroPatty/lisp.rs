@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct Env {
     values: HashMap<String, Rc<Value>>,
     parent: Option<Rc<RefCell<Env>>>,
@@ -21,6 +22,12 @@ impl Env {
         values.insert(String::from("<"), Rc::new(Value::Function(lt)));
         let parent = None;
         Env { values, parent }
+    }
+    pub(crate) fn make_child(env: Rc<RefCell<Env>>) -> Self {
+        Env {
+            values: HashMap::new(),
+            parent: Some(env.clone()),
+        }
     }
     pub(crate) fn lookup(&self, token: &str) -> Option<Rc<Value>> {
         if let Some(local_value) = self.values.get(token) {
