@@ -9,12 +9,22 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub enum EvalError {
     Unknown,
+    TypeError(String),
+    ArgumentCount((usize, usize)),
 }
 
 impl fmt::Display for EvalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EvalError::Unknown => write!(f, "Unknown error"),
+            EvalError::TypeError(msg) => write!(f, "Invalid types: {}", msg),
+            EvalError::ArgumentCount((exp, fnd)) => {
+                write!(
+                    f,
+                    "Invalid number of arguments. Expected {}, got {}",
+                    exp, fnd
+                )
+            }
         }
     }
 }
@@ -28,16 +38,16 @@ pub(crate) fn evaluate(value: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Val
             let op = match head.as_ref() {
                 Value::Id(name) => {
                     if let Some(form) = get_special_forms().get(name) {
-                        return form(rest, env.clone()).map(Rc::new);
+                        return form(rest.clone(), env.clone());
                     }
                     env.borrow().lookup(name).ok_or(EvalError::Unknown)?
                 }
                 _ => evaluate(head.clone(), env.clone())?,
             };
             let args = eval_args(rest.clone(), env.clone())?;
-            evaluate_fn(&op, args)
+            evaluate_fn(op.clone(), args, env.clone())
         }
-        Value::Id(id) => env.borrow().lookup(id).map_or(Ok(value), Ok),
+        Value::Id(id) => env.borrow().lookup(id).ok_or(EvalError::Unknown),
 
         _ => Ok(value),
     }
@@ -52,10 +62,14 @@ fn eval_args(mut list: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Vec<Rc<Value>
     Ok(out)
 }
 
-fn evaluate_fn(callable: &Value, args: Vec<Rc<Value>>) -> Result<Rc<Value>, EvalError> {
-    match callable {
-        Value::Function(func) => Ok(Rc::new(func(&args)?)),
-        Value::Lambda(func) => Ok(func.apply(args)?),
+fn evaluate_fn(
+    callable: Rc<Value>,
+    args: Vec<Rc<Value>>,
+    env: Rc<RefCell<Env>>,
+) -> Result<Rc<Value>, EvalError> {
+    match callable.as_ref() {
+        Value::Function(func) => func(&args, env),
+        Value::Lambda(func) => func.apply(args),
         _ => Err(EvalError::Unknown),
     }
 }

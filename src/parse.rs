@@ -1,4 +1,5 @@
 use crate::atom::{Value, parse_atom};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
@@ -21,29 +22,41 @@ impl fmt::Display for ParseError {
 // 3. Implement the Error trait
 impl Error for ParseError {}
 
-pub fn parse(input: &str) -> Result<Value, ParseError> {
+pub fn parse(input: &str) -> Result<Rc<Value>, ParseError> {
+    let mut symbol_table: HashMap<String, Rc<Value>> = HashMap::new();
+    symbol_table.insert(String::from("Nil"), Rc::new(Value::Nil));
     let trimmed = input.trim_start();
+    if trimmed.starts_with('\'') | trimmed.starts_with('`') {
+        let res = parse(&trimmed[1..]);
+        return parse_one(&trimmed, &mut symbol_table).map(|val| val.0.unwrap());
+    }
     if !trimmed.starts_with('(') {
         // handle bare atom / error, as appropriate
         return Err(ParseError::UnclosedParen);
     }
-    let (value, _) = parse_list(&trimmed[1..])?;
+    let (value, _) = parse_list(&trimmed[1..], &mut symbol_table)?;
     Ok(value)
 }
 
-pub(crate) fn parse_list(input: &str) -> Result<(Value, usize), ParseError> {
-    let (first_value, first_size) = parse_one(&input)?;
+pub(crate) fn parse_list(
+    input: &str,
+    symbol_table: &mut HashMap<String, Rc<Value>>,
+) -> Result<(Rc<Value>, usize), ParseError> {
+    let (first_value, first_size) = parse_one(&input, symbol_table)?;
     if let Some(fv) = first_value {
-        let (next_value, next_size) = parse_list(&input[first_size..])?;
+        let (next_value, next_size) = parse_list(&input[first_size..], symbol_table)?;
         return Ok((
-            Value::List((Rc::new(fv), Rc::new(next_value))),
+            Rc::new(Value::List((fv, next_value))),
             first_size + next_size,
         ));
     }
-    Ok((Value::Nil, first_size))
+    Ok((Rc::new(Value::Nil), first_size))
 }
 
-fn parse_one(input: &str) -> Result<(Option<Value>, usize), ParseError> {
+fn parse_one(
+    input: &str,
+    symbol_table: &mut HashMap<String, Rc<Value>>,
+) -> Result<(Option<Rc<Value>>, usize), ParseError> {
     let n_blank = input
         .find(|c: char| !c.is_whitespace())
         .ok_or(ParseError::UnclosedParen)?;
@@ -51,10 +64,56 @@ fn parse_one(input: &str) -> Result<(Option<Value>, usize), ParseError> {
     if first == ')' {
         return Ok((None, n_blank + 1));
     } else if first == '(' {
-        let (val, size) = parse_list(&input[n_blank + 1..])?;
+        let (val, size) = parse_list(&input[n_blank + 1..], symbol_table)?;
         return Ok((Some(val), size + n_blank + 1));
+    } else if first == '\'' {
+        let (new_value, new_size) = expand(
+            &input[n_blank + 1..],
+            Rc::new(Value::Id(format!("quote"))),
+            symbol_table,
+        )?;
+
+        return Ok((Some(new_value), n_blank + new_size + 1));
+    } else if first == '`' {
+        let (new_value, new_size) = expand(
+            &input[n_blank + 1..],
+            Rc::new(Value::Id(format!("quasiquote"))),
+            symbol_table,
+        )?;
+
+        return Ok((Some(new_value), n_blank + new_size + 1));
+    } else if first == ',' && input.chars().nth(n_blank + 1).unwrap_or(' ') == '@' {
+        let (new_value, new_size) = expand(
+            &input[n_blank + 2..],
+            Rc::new(Value::Id(format!("unquote-splicing"))),
+            symbol_table,
+        )?;
+
+        return Ok((Some(new_value), n_blank + new_size + 2));
+    } else if first == ',' {
+        let (new_value, new_size) = expand(
+            &input[n_blank + 1..],
+            Rc::new(Value::Id(format!("unquote"))),
+            symbol_table,
+        )?;
+
+        return Ok((Some(new_value), n_blank + new_size + 1));
     }
 
-    let (val, n_consumed) = parse_atom(&input[n_blank..])?;
+    let (val, n_consumed) = parse_atom(&input[n_blank..], symbol_table)?;
     return Ok((Some(val), n_consumed + n_blank));
+}
+
+fn expand(
+    input: &str,
+    symbol: Rc<Value>,
+    symbol_table: &mut HashMap<String, Rc<Value>>,
+) -> Result<(Rc<Value>, usize), ParseError> {
+    let (inner_value, inner_size) = parse_one(&input, symbol_table)?;
+    let inner_list = Value::List((
+        inner_value.ok_or(ParseError::UnclosedParen)?,
+        Rc::new(Value::Nil),
+    ));
+    let return_value = Value::List((symbol, Rc::new(inner_list)));
+    return Ok((Rc::new(return_value), inner_size));
 }

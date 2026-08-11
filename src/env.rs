@@ -1,5 +1,6 @@
 use crate::atom::Value;
 use crate::eval::EvalError;
+use crate::list::default;
 use crate::numeric::{add, divide, equals, lt, multiply, subtract};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -13,7 +14,7 @@ pub(crate) struct Env {
 
 impl Env {
     pub(crate) fn default() -> Self {
-        let mut values = HashMap::new();
+        let mut values = default();
         values.insert(String::from("+"), Rc::new(Value::Function(add)));
         values.insert(String::from("*"), Rc::new(Value::Function(multiply)));
         values.insert(String::from("/"), Rc::new(Value::Function(divide)));
@@ -38,15 +39,13 @@ impl Env {
         }
         None
     }
-    pub(crate) fn insert(&mut self, token: &str, value: &Value) {
-        self.values
-            .insert(String::from(token), Rc::new(value.clone()));
+    pub(crate) fn insert(&mut self, token: &str, value: Rc<Value>) {
+        self.values.insert(String::from(token), value);
     }
-    pub(crate) fn set(&mut self, token: &str, value: &Value) -> Result<Value, EvalError> {
+    pub(crate) fn set(&mut self, token: &str, value: Rc<Value>) -> Result<Rc<Value>, EvalError> {
         if self.values.contains_key(token) {
-            self.values
-                .insert(String::from(token), Rc::new(value.clone()));
-            return Ok(Value::Nil);
+            self.values.insert(String::from(token), value);
+            return Ok(Rc::new(Value::Nil));
         } else if let Some(parent) = &self.parent {
             return parent.borrow_mut().set(token, value);
         }

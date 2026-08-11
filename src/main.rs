@@ -2,6 +2,7 @@ mod atom;
 mod env;
 mod eval;
 mod lambda;
+mod list;
 mod numeric;
 mod parse;
 mod special;
@@ -19,8 +20,9 @@ fn main() {
         io::stdin().read_line(&mut input).unwrap();
         let parsed = parse::parse(&input);
         if let Ok(res) = parsed {
-            let result = eval::evaluate(Rc::new(res), env_.clone());
-            println!("{:?}", result);
+            println!("{}", res);
+            let result = eval::evaluate(res, env_.clone());
+            println!("{}", result.unwrap());
         } else {
             println!("{:?}", parsed.unwrap_err())
         }
