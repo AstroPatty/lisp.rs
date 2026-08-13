@@ -1,6 +1,7 @@
 use crate::env::Env;
 use crate::eval::EvalError;
 use crate::lambda::Lambda;
+use crate::macros::Macro;
 use crate::parse::ParseError;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -18,6 +19,7 @@ pub(crate) enum Value {
     List((Rc<Value>, Rc<Value>)),
     Function(fn(&[Rc<Value>], Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError>),
     Lambda(Lambda),
+    Macro(Macro),
     Nil,
 }
 
@@ -39,6 +41,7 @@ impl Value {
     pub(crate) fn is_truthy(&self) -> bool {
         match self {
             Value::Nil => false,
+            Value::Bool(b) => *b,
             _ => true,
         }
     }
@@ -63,6 +66,7 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{}", if *b { "#t" } else { "#f" }),
             Value::Char(c) => write!(f, "#\\{}", c),
             Value::Id(id) => write!(f, "{}", id),
+            Value::Macro(_) => write!(f, "Macro"),
             Value::List((car, cdr)) => {
                 write!(f, "({}", car)?;
                 let mut rest = cdr.clone();

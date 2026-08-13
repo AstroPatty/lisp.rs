@@ -9,7 +9,6 @@ pub(crate) fn default() -> HashMap<String, Rc<Value>> {
     let mut values = HashMap::new();
     values.insert(String::from("cons"), Rc::new(Value::Function(cons)));
     values.insert(String::from("list"), Rc::new(Value::Function(list)));
-    values.insert(String::from("list"), Rc::new(Value::Function(list)));
     values.insert(String::from("car"), Rc::new(Value::Function(car)));
     values.insert(String::from("cdr"), Rc::new(Value::Function(cdr)));
     values.insert(String::from("null"), Rc::new(Value::Function(null)));
@@ -74,7 +73,7 @@ fn symbolp(vals: &[Rc<Value>], _env: Rc<RefCell<Env>>) -> Result<Rc<Value>, Eval
 
 fn list(vals: &[Rc<Value>], env: Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError> {
     if vals.len() == 0 {
-        return Err(EvalError::ArgumentCount((1, 0)));
+        return Ok(Rc::new(Value::Nil));
     }
     if vals.len() == 1 {
         return Ok(Rc::new(Value::List((vals[0].clone(), Rc::new(Value::Nil)))));
@@ -129,9 +128,10 @@ fn reverse(vals: &[Rc<Value>], _env: Rc<RefCell<Env>>) -> Result<Rc<Value>, Eval
 
 fn _reverse(val: Rc<Value>) -> Result<Rc<Value>, EvalError> {
     match val.as_ref() {
+        Value::Nil => Ok(val.clone()),
         Value::List((car, cdr)) => match cdr.as_ref() {
-            Value::Nil => Ok(car.clone()),
-            Value::List(_) => Ok(Rc::new(Value::List((_reverse(cdr.clone())?, car.clone())))),
+            Value::Nil => Ok(val.clone()),
+            Value::List(_) => _append(_reverse(cdr.clone())?, car.clone()),
             _ => Err(EvalError::Unknown),
         },
         _ => Err(EvalError::TypeError(String::from("Expected a list"))),
@@ -177,10 +177,32 @@ fn append(vals: &[Rc<Value>], _env: Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalE
     Ok(_append(return_value, vals[n_vals - 1].clone())?)
 }
 
+pub(crate) fn build_list(vals: &[Rc<Value>]) -> Rc<Value> {
+    if vals.len() == 0 {
+        Rc::new(Value::Nil)
+    } else {
+        let list = Value::List((vals[0].clone(), build_list(&vals[1..])));
+        Rc::new(list)
+    }
+}
+
 pub(crate) fn _append(lhs: Rc<Value>, rhs: Rc<Value>) -> Result<Rc<Value>, EvalError> {
+    if matches!(lhs.as_ref(), Value::Nil) {
+        return _duplicate(rhs);
+    } else if matches!(rhs.as_ref(), Value::Nil) {
+        return Ok(lhs.clone());
+    }
+
     if let Value::List((car, cdr)) = lhs.as_ref() {
         match cdr.as_ref() {
-            Value::Nil => return Ok(Rc::new(Value::List((car.clone(), rhs)))),
+            Value::Nil => {
+                let new_cdr = match rhs.as_ref() {
+                    Value::List(_) => rhs.clone(),
+                    _ => Rc::new(Value::List((rhs.clone(), cdr.clone()))),
+                };
+                let new_list = Value::List((car.clone(), new_cdr));
+                return Ok(Rc::new(new_list));
+            }
             Value::List(_) => {
                 let new_cdr = _append(cdr.clone(), rhs.clone())?;
                 return Ok(Rc::new(Value::List((car.clone(), new_cdr))));
@@ -192,6 +214,9 @@ pub(crate) fn _append(lhs: Rc<Value>, rhs: Rc<Value>) -> Result<Rc<Value>, EvalE
 }
 
 fn _duplicate(val: Rc<Value>) -> Result<Rc<Value>, EvalError> {
+    if matches!(val.as_ref(), Value::Nil) {
+        return Ok(val);
+    }
     if let Value::List((car, cdr)) = val.as_ref() {
         let cons = match cdr.as_ref() {
             Value::Nil => Value::List((car.clone(), cdr.clone())),

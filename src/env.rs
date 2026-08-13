@@ -42,13 +42,20 @@ impl Env {
     pub(crate) fn insert(&mut self, token: &str, value: Rc<Value>) {
         self.values.insert(String::from(token), value);
     }
+    pub(crate) fn defpar(&mut self, token: &str, value: Rc<Value>) {
+        if let Some(parent) = &self.parent {
+            parent.borrow_mut().defpar(token, value)
+        } else {
+            self.insert(token, value)
+        }
+    }
     pub(crate) fn set(&mut self, token: &str, value: Rc<Value>) -> Result<Rc<Value>, EvalError> {
         if self.values.contains_key(token) {
-            self.values.insert(String::from(token), value);
-            return Ok(Rc::new(Value::Nil));
+            self.values.insert(String::from(token), value.clone());
+            return Ok(value.clone());
         } else if let Some(parent) = &self.parent {
             return parent.borrow_mut().set(token, value);
         }
-        return Err(EvalError::Unknown);
+        return Err(EvalError::UnknownVariable(String::from(token)));
     }
 }

@@ -1,8 +1,9 @@
 use crate::atom::Value;
 use crate::env::Env;
-use crate::eval::{EvalError, evaluate};
+use crate::eval::{EvalError, eval_args, evaluate};
 use crate::lambda::lambda;
 use crate::list::_append;
+use crate::macros::Macro;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -19,6 +20,8 @@ pub(crate) fn get_special_forms()
     output.insert(String::from("if"), conditional);
     output.insert(String::from("lambda"), lambda);
     output.insert(String::from("quasiquote"), quasiquote);
+    output.insert(String::from("defmacro"), defmacro);
+    output.insert(String::from("print"), print_);
     output
 }
 
@@ -42,8 +45,8 @@ fn defparameter(val: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Value>, Eval
             _ => value,
         };
         let result = evaluate(unwrapped_val, env.clone())?;
-        env.borrow_mut().insert(id, result.clone());
-        return Ok(result);
+        env.borrow_mut().defpar(id, result.clone());
+        return Ok(first);
     };
     Ok(Rc::new(Value::Nil))
 }
@@ -66,13 +69,17 @@ fn setq(val: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError> {
 }
 
 pub(crate) fn progn(val: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError> {
+    if matches!(val.as_ref(), Value::Nil) {
+        return Ok(val);
+    }
+
     let mut current_list = val;
     loop {
         match current_list.as_ref() {
             Value::List((car, cdr)) => {
-                let car_value = evaluate(car.clone(), env.clone());
+                let car_value = evaluate(car.clone(), env.clone())?;
                 match cdr.as_ref() {
-                    Value::Nil => return car_value,
+                    Value::Nil => return Ok(car_value),
                     _ => current_list = cdr.clone(),
                 }
             }
@@ -141,4 +148,24 @@ fn match_unary(list: &Value, symbol: &str) -> Option<Rc<Value>> {
         }
     }
     return None;
+}
+fn defmacro(val: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError> {
+    if let Value::List((car, cdr)) = val.as_ref() {
+        if let Value::Id(id) = car.as_ref() {
+            let mac = Macro::parse(cdr.clone(), env.clone())?;
+            let value = Rc::new(Value::Macro(mac));
+            env.borrow_mut().defpar(id, value);
+            return Ok(Rc::new(Value::Nil));
+        }
+    }
+    Err(EvalError::TypeError(format!("Expected a list!")))
+}
+
+fn print_(val: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError> {
+    let mut evald = eval_args(val.clone(), env.clone())?;
+    if evald.len() != 1 {
+        return Err(EvalError::ArgumentCount((1, evald.len())));
+    }
+    println!("{}", evald.pop().unwrap());
+    Ok(Rc::new(Value::Nil))
 }

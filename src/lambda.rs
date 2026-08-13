@@ -19,7 +19,7 @@ impl Lambda {
     }
     pub(crate) fn apply(&self, pars: Vec<Rc<Value>>) -> Result<Rc<Value>, EvalError> {
         if pars.len() != self.params.len() {
-            return Err(EvalError::Unknown);
+            return Err(EvalError::ArgumentCount((self.params.len(), pars.len())));
         }
         let mut new_env = Env::make_child(self.env.clone());
         for (name, par) in zip(self.params.iter(), pars.iter()) {
@@ -51,8 +51,11 @@ pub(crate) fn lambda(value: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Value
 }
 
 fn collect_names(value: &Value) -> Result<Vec<String>, EvalError> {
-    let (mut name, mut rest) = as_cons(value)?;
     let mut names = Vec::new();
+    if matches!(value, Value::Nil) {
+        return Ok(names);
+    }
+    let (mut name, mut rest) = as_cons(value)?;
     loop {
         match name.as_ref() {
             Value::Id(id) => names.push(id.clone()),

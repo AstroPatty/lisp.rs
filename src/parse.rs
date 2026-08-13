@@ -21,13 +21,33 @@ impl fmt::Display for ParseError {
 
 // 3. Implement the Error trait
 impl Error for ParseError {}
-
-pub fn parse(input: &str) -> Result<Rc<Value>, ParseError> {
+pub fn parse_file(input: &str) -> Result<Vec<Rc<Value>>, ParseError> {
     let mut symbol_table: HashMap<String, Rc<Value>> = HashMap::new();
-    symbol_table.insert(String::from("Nil"), Rc::new(Value::Nil));
+    symbol_table.insert(String::from("T"), Rc::new(Value::Bool(true)));
+    let total_len = input.len();
+    let mut offset = 0;
+    let mut stmts: Vec<Rc<Value>> = Vec::new();
+    let mut current = input.trim();
+    loop {
+        if offset == total_len {
+            return Ok(stmts);
+        }
+        if !current.starts_with("(") {
+            return Err(ParseError::UnclosedParen);
+        }
+        let (value, n_taken) = parse_list(&current[1..], &mut symbol_table)?;
+        stmts.push(value);
+        current = &current[1 + n_taken..];
+        offset += 1 + n_taken;
+    }
+}
+
+pub fn parse_line(input: &str) -> Result<Rc<Value>, ParseError> {
+    let mut symbol_table: HashMap<String, Rc<Value>> = HashMap::new();
+    symbol_table.insert(String::from("T"), Rc::new(Value::Bool(true)));
+    symbol_table.insert(String::from("nil"), Rc::new(Value::Nil));
     let trimmed = input.trim_start();
     if trimmed.starts_with('\'') | trimmed.starts_with('`') {
-        let res = parse(&trimmed[1..]);
         return parse_one(&trimmed, &mut symbol_table).map(|val| val.0.unwrap());
     }
     if !trimmed.starts_with('(') {

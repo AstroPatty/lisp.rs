@@ -11,6 +11,7 @@ pub enum EvalError {
     Unknown,
     TypeError(String),
     ArgumentCount((usize, usize)),
+    UnknownVariable(String),
 }
 
 impl fmt::Display for EvalError {
@@ -24,6 +25,9 @@ impl fmt::Display for EvalError {
                     "Invalid number of arguments. Expected {}, got {}",
                     exp, fnd
                 )
+            }
+            EvalError::UnknownVariable(name) => {
+                write!(f, "No variable named {}", name)
             }
         }
     }
@@ -44,6 +48,10 @@ pub(crate) fn evaluate(value: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Val
                 }
                 _ => evaluate(head.clone(), env.clone())?,
             };
+            if let Value::Macro(mac) = op.as_ref() {
+                return mac.run(rest.clone(), env.clone());
+            }
+
             let args = eval_args(rest.clone(), env.clone())?;
             evaluate_fn(op.clone(), args, env.clone())
         }
@@ -53,7 +61,10 @@ pub(crate) fn evaluate(value: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Val
     }
 }
 
-fn eval_args(mut list: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Vec<Rc<Value>>, EvalError> {
+pub(crate) fn eval_args(
+    mut list: Rc<Value>,
+    env: Rc<RefCell<Env>>,
+) -> Result<Vec<Rc<Value>>, EvalError> {
     let mut out = Vec::new();
     while let Value::List((car, cdr)) = list.as_ref() {
         out.push(evaluate(car.clone(), env.clone())?);
