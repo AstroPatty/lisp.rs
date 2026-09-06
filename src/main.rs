@@ -18,12 +18,11 @@ use std::rc::Rc;
 fn main() {
     let args: Vec<String> = stdenv::args().collect();
 
-    let env_ = Rc::new(RefCell::new(Env::default()));
+    let env_ = Env::default();
     if args.len() == 2 {
         let file_path = &args[1];
         let contents = fs::read_to_string(file_path).unwrap();
-        let cleaned = contents.replace("\r\n", "").replace('\n', "");
-        let parsed_result = parse::parse_file(&cleaned);
+        let parsed_result = parse::parse_file(&contents);
         if let Ok(parsed) = parsed_result {
             let mut val = Rc::new(atom::Value::Nil);
             for list in parsed {

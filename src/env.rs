@@ -1,9 +1,12 @@
 use crate::atom::Value;
 use crate::eval::EvalError;
+use crate::eval::evaluate;
 use crate::list::default;
 use crate::numeric::{add, divide, equals, lt, multiply, subtract};
+use crate::parse::parse_file;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs;
 use std::rc::Rc;
 
 #[derive(Debug, PartialEq)]
@@ -13,7 +16,7 @@ pub(crate) struct Env {
 }
 
 impl Env {
-    pub(crate) fn default() -> Self {
+    pub(crate) fn default() -> Rc<RefCell<Self>> {
         let mut values = default();
         values.insert(String::from("+"), Rc::new(Value::Function(add)));
         values.insert(String::from("*"), Rc::new(Value::Function(multiply)));
@@ -22,8 +25,20 @@ impl Env {
         values.insert(String::from("="), Rc::new(Value::Function(equals)));
         values.insert(String::from("<"), Rc::new(Value::Function(lt)));
         let parent = None;
-        Env { values, parent }
+        let env = Rc::new(RefCell::new(Env { values, parent }));
+
+        return Env::load_prelude(env);
     }
+    fn load_prelude(env: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
+        let contents = fs::read_to_string("prelude.lisp").unwrap();
+        let parsed = parse_file(&contents).unwrap();
+        for value in parsed {
+            _ = evaluate(value.clone(), env.clone());
+        }
+
+        return env;
+    }
+
     pub(crate) fn make_child(env: Rc<RefCell<Env>>) -> Self {
         Env {
             values: HashMap::new(),

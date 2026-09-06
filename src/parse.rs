@@ -26,12 +26,13 @@ impl fmt::Display for ParseError {
 // 3. Implement the Error trait
 impl Error for ParseError {}
 pub fn parse_file(input: &str) -> Result<Vec<Rc<Value>>, ParseError> {
+    let cleaned = input.replace("\r\n", "").replace('\n', "");
     let mut symbol_table: HashMap<String, Rc<Value>> = HashMap::new();
     symbol_table.insert(String::from("T"), Rc::new(Value::Bool(true)));
-    let total_len = input.len();
+    let total_len = cleaned.len();
     let mut offset = 0;
     let mut stmts: Vec<Rc<Value>> = Vec::new();
-    let mut current = input.trim();
+    let mut current = cleaned.trim();
     loop {
         if offset == total_len {
             return Ok(stmts);
