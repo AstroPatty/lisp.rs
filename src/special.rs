@@ -7,8 +7,11 @@ use crate::macros::Macro;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-pub(crate) fn get_special_forms()
--> HashMap<String, fn(Rc<Value>, Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError>> {
+use std::sync::LazyLock;
+
+pub(crate) static SPECIAL: LazyLock<
+    HashMap<String, fn(Rc<Value>, Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError>>,
+> = LazyLock::new(|| {
     let mut output: HashMap<
         String,
         fn(Rc<Value>, Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError>,
@@ -23,7 +26,7 @@ pub(crate) fn get_special_forms()
     output.insert(String::from("defmacro"), defmacro);
     output.insert(String::from("print"), print_);
     output
-}
+});
 
 fn quote(val: Rc<Value>, _: Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError> {
     match val.as_ref() {

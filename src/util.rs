@@ -1,6 +1,3 @@
-use crate::atom::Value;
-use crate::eval::EvalError;
-use std::rc::Rc;
 macro_rules! builtins {
     ($(
             $vis:vis fn $name:ident($env:ident : Rc<RefCell<Env>> $(, $arg:ident : Rc<Value>)* $(,)?) -> Result<Rc<Value>, EvalError> $body:block

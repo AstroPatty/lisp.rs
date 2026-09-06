@@ -1,6 +1,6 @@
 use crate::atom::Value;
 use crate::env::Env;
-use crate::eval::{EvalError, evaluate};
+use crate::eval::EvalError;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -175,15 +175,6 @@ fn append(vals: &[Rc<Value>], _env: Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalE
         return_value = _append(return_value, _duplicate(vals[i].clone())?)?;
     }
     Ok(_append(return_value, vals[n_vals - 1].clone())?)
-}
-
-pub(crate) fn build_list(vals: &[Rc<Value>]) -> Rc<Value> {
-    if vals.len() == 0 {
-        Rc::new(Value::Nil)
-    } else {
-        let list = Value::List((vals[0].clone(), build_list(&vals[1..])));
-        Rc::new(list)
-    }
 }
 
 pub(crate) fn _append(lhs: Rc<Value>, rhs: Rc<Value>) -> Result<Rc<Value>, EvalError> {

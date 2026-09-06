@@ -96,6 +96,10 @@ pub(crate) fn parse_atom(
     input: &str,
     symbol_table: &mut HashMap<String, Rc<Value>>,
 ) -> Result<(Rc<Value>, usize), ParseError> {
+    if let Some(res) = parse_str(input) {
+        return res;
+    }
+
     let atom: String = if let Some(index) = input.find(&[' ', ')', '(']) {
         input.chars().take(index).collect()
     } else {
@@ -106,6 +110,8 @@ pub(crate) fn parse_atom(
         return Ok((Rc::new(Value::Int(val)), len));
     } else if let Ok(val) = atom.parse::<f64>() {
         return Ok((Rc::new(Value::Float(val)), len));
+    } else if let Some(char_) = parse_char(&atom) {
+        return char_.map(|c| (c, len));
     } else {
         if let Some(symbol) = symbol_table.get(&atom) {
             return Ok((symbol.clone(), len));
@@ -113,5 +119,26 @@ pub(crate) fn parse_atom(
         let value = Rc::new(Value::Id(atom.clone()));
         symbol_table.insert(String::from(atom.clone()), value.clone());
         return Ok((value, len));
+    }
+}
+
+fn parse_char(input: &str) -> Option<Result<Rc<Value>, ParseError>> {
+    if !input.starts_with("\\#") {
+        return None;
+    } else if input.len() != 3 {
+        return Some(Err(ParseError::InvalidChar));
+    }
+    let value = Value::Char(input.chars().nth(2).unwrap());
+    Some(Ok(Rc::new(value)))
+}
+
+fn parse_str(input: &str) -> Option<Result<(Rc<Value>, usize), ParseError>> {
+    if !input.starts_with('"') {
+        None
+    } else if let Some(index) = input[1..].find(&['"']) {
+        let result = Value::Str(input[1..index + 1].to_owned());
+        Some(Ok((Rc::new(result), index + 2)))
+    } else {
+        Some(Err(ParseError::UnterminatedString))
     }
 }

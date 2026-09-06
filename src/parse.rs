@@ -8,13 +8,17 @@ use std::rc::Rc;
 pub enum ParseError {
     UnclosedParen,
     UnexpectedEOF,
+    InvalidChar,
+    UnterminatedString,
 }
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseError::UnclosedParen => write!(f, "Item was not found."),
-            ParseError::UnexpectedEOF => write!(f, "Item was not found."),
+            ParseError::UnclosedParen => write!(f, "Unclosed parenthesis"),
+            ParseError::UnexpectedEOF => write!(f, "Unexpected end of file"),
+            ParseError::InvalidChar => write!(f, "Invalid character literal"),
+            ParseError::UnterminatedString => write!(f, "Missing ending quote on string literal"),
         }
     }
 }

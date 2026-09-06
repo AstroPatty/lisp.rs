@@ -1,10 +1,7 @@
 use crate::atom::Value;
 use crate::env::Env;
 use crate::eval::{EvalError, evaluate};
-use crate::list::build_list;
-use crate::special::progn;
 use std::cell::RefCell;
-use std::iter::zip;
 use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,6 +1,6 @@
 use crate::atom::Value;
 use crate::env::Env;
-use crate::special::get_special_forms;
+use crate::special::SPECIAL;
 use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
@@ -41,7 +41,7 @@ pub(crate) fn evaluate(value: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Val
         Value::List((head, rest)) => {
             let op = match head.as_ref() {
                 Value::Id(name) => {
-                    if let Some(form) = get_special_forms().get(name) {
+                    if let Some(form) = SPECIAL.get(name) {
                         return form(rest.clone(), env.clone());
                     }
                     env.borrow().lookup(name).ok_or(EvalError::Unknown)?
