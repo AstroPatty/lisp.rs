@@ -4,15 +4,19 @@ use crate::eval::evaluate;
 use crate::list::default;
 use crate::numeric::{add, divide, equals, lt, multiply, subtract};
 use crate::parse::parse_file;
+use crate::special::load;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::env::current_dir;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Env {
     values: HashMap<String, Rc<Value>>,
     parent: Option<Rc<RefCell<Env>>>,
+    cwd: PathBuf,
 }
 
 impl Env {
@@ -25,17 +29,21 @@ impl Env {
         values.insert(String::from("="), Rc::new(Value::Function(equals)));
         values.insert(String::from("<"), Rc::new(Value::Function(lt)));
         let parent = None;
-        let env = Rc::new(RefCell::new(Env { values, parent }));
+        let cwd = current_dir().unwrap();
+
+        let env = Rc::new(RefCell::new(Env {
+            values,
+            parent,
+            cwd,
+        }));
 
         return Env::load_prelude(env);
     }
     fn load_prelude(env: Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
-        let contents = fs::read_to_string("prelude.lisp").unwrap();
-        let parsed = parse_file(&contents).unwrap();
-        for value in parsed {
-            _ = evaluate(value.clone(), env.clone());
-        }
+        let prelude_path = Rc::new(Value::Str(format!("lib/prelude.lisp")));
+        let prelude_args = Value::List((prelude_path, Rc::new(Value::Nil)));
 
+        _ = load(Rc::new(prelude_args), env.clone());
         return env;
     }
 
@@ -43,6 +51,7 @@ impl Env {
         Env {
             values: HashMap::new(),
             parent: Some(env.clone()),
+            cwd: env.borrow_mut().get_cwd().to_path_buf(),
         }
     }
     pub(crate) fn lookup(&self, token: &str) -> Option<Rc<Value>> {
@@ -72,5 +81,12 @@ impl Env {
             return parent.borrow_mut().set(token, value);
         }
         return Err(EvalError::UnknownVariable(String::from(token)));
+    }
+
+    pub(crate) fn get_cwd(&self) -> &Path {
+        return self.cwd.as_path();
+    }
+    pub(crate) fn set_cwd(&mut self, path: PathBuf) {
+        self.cwd = path;
     }
 }

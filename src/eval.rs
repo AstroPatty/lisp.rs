@@ -4,6 +4,7 @@ use crate::special::SPECIAL;
 use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -12,6 +13,8 @@ pub enum EvalError {
     TypeError(String),
     ArgumentCount((usize, usize)),
     UnknownVariable(String),
+    FileNotFound(PathBuf),
+    Unparseable(PathBuf),
 }
 
 impl fmt::Display for EvalError {
@@ -28,6 +31,12 @@ impl fmt::Display for EvalError {
             }
             EvalError::UnknownVariable(name) => {
                 write!(f, "No variable named {}", name)
+            }
+            EvalError::FileNotFound(fname) => {
+                write!(f, "File not found: {}", fname.display())
+            }
+            EvalError::Unparseable(fname) => {
+                write!(f, "Could not parse file: {}", fname.display())
             }
         }
     }

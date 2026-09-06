@@ -4,8 +4,12 @@ use crate::eval::{EvalError, eval_args, evaluate};
 use crate::lambda::lambda;
 use crate::list::_append;
 use crate::macros::Macro;
+use crate::parse::parse_file;
+use crate::util::builtins;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::LazyLock;
 
@@ -25,8 +29,43 @@ pub(crate) static SPECIAL: LazyLock<
     output.insert(String::from("quasiquote"), quasiquote);
     output.insert(String::from("defmacro"), defmacro);
     output.insert(String::from("print"), print_);
+    output.insert(String::from("load"), load);
     output
 });
+
+pub(crate) fn load(val: Rc<Value>, env: Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError> {
+    let fname = match val.as_ref() {
+        Value::List((cons, cdr)) => {
+            if let Value::Str(str_) = cons.as_ref()
+                && matches!(cdr.as_ref(), Value::Nil)
+            {
+                str_.to_owned()
+            } else {
+                return Err(EvalError::ArgumentCount((1, 2)));
+            }
+        }
+        _ => return Err(EvalError::TypeError(format!("Expected a string"))),
+    };
+
+    let pwd = env.borrow().get_cwd().to_path_buf();
+    let fpath = pwd.join(fname);
+
+    let contents =
+        fs::read_to_string(&fpath).map_err(|_| EvalError::FileNotFound(fpath.clone()))?;
+    let parsed = parse_file(&contents).map_err(|_| EvalError::Unparseable(fpath.clone()))?;
+
+    let file_path = PathBuf::from(fpath);
+    let cwd = env.borrow().get_cwd().to_path_buf();
+    env.borrow_mut()
+        .set_cwd(file_path.parent().unwrap().to_path_buf());
+
+    let mut result: Rc<Value> = Rc::new(Value::Nil);
+    for value in parsed {
+        result = evaluate(value.clone(), env.clone())?;
+    }
+    env.borrow_mut().set_cwd(cwd);
+    Ok(result)
+}
 
 fn quote(val: Rc<Value>, _: Rc<RefCell<Env>>) -> Result<Rc<Value>, EvalError> {
     match val.as_ref() {
